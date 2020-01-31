@@ -100,7 +100,11 @@ tmux_socket() {
 # tmux server each time.
 cache_tmux_default_command() {
 	local default_shell="$(get_tmux_option "default-shell" "")"
-	export TMUX_DEFAULT_COMMAND="$(get_tmux_option "default-command" "$default_shell")"
+	local opt=""
+	if [ "$(basename "$default_shell")" == "bash" ]; then
+		opt="-l "
+	fi
+	export TMUX_DEFAULT_COMMAND="$(get_tmux_option "default-command" "$opt$default_shell")"
 }
 
 tmux_default_command() {
@@ -170,6 +174,7 @@ restore_pane() {
 		window_name="$(remove_first_char "$window_name")"
 		pane_full_command="$(remove_first_char "$pane_full_command")"
 		if pane_exists "$session_name" "$window_number" "$pane_index"; then
+			tmux rename-window -t "$window_number" "$window_name"
 			if is_restoring_from_scratch; then
 				# overwrite the pane
 				# happens only for the first pane if it's the only registered pane for the whole tmux server
@@ -182,6 +187,7 @@ restore_pane() {
 				register_existing_pane "$session_name" "$window_number" "$pane_index"
 			fi
 		elif window_exists "$session_name" "$window_number"; then
+			tmux rename-window -t "$window_number" "$window_name"
 			new_pane "$session_name" "$window_number" "$window_name" "$dir" "$pane_index"
 		elif session_exists "$session_name"; then
 			new_window "$session_name" "$window_number" "$window_name" "$dir" "$pane_index"
@@ -293,7 +299,7 @@ restore_all_pane_processes() {
 	if restore_pane_processes_enabled; then
 		local pane_full_command
 		awk 'BEGIN { FS="\t"; OFS="\t" } /^pane/ && $11 !~ "^:$" { print $2, $3, $7, $8, $11; }' $(last_resurrect_file) |
-			while IFS=$d read session_name window_number pane_index dir pane_full_command; do
+			while IFS=$d read -r session_name window_number pane_index dir pane_full_command; do
 				dir="$(remove_first_char "$dir")"
 				pane_full_command="$(remove_first_char "$pane_full_command")"
 				restore_pane_process "$pane_full_command" "$session_name" "$window_number" "$pane_index" "$dir"
